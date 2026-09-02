@@ -226,11 +226,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </div>
 
       <div class="details-panel" id="heroDetails">
-        <form class="lead-form" id="heroForm" onsubmit="return false;">
-          <input class="field-input" id="heroName" type="text" placeholder="Full name" autocomplete="name">
-          <input class="field-input" id="heroPhone" type="tel" placeholder="Phone number" autocomplete="tel">
-          <input class="field-input" id="heroAddress" type="text" placeholder="Address (optional)" autocomplete="street-address">
-          <textarea class="field-textarea" id="heroNotes" placeholder="Tell us a bit about the project (optional)"></textarea>
+        <form class="lead-form" id="heroForm" name="hero-lead" data-netlify="true" onsubmit="return false;">
+          <input type="hidden" name="form-name" value="hero-lead">
+          <input class="field-input" id="heroName" name="name" type="text" placeholder="Full name" autocomplete="name">
+          <input class="field-input" id="heroPhone" name="phone" type="tel" placeholder="Phone number" autocomplete="tel">
+          <input class="field-input" id="heroAddress" name="address" type="text" placeholder="Address (optional)" autocomplete="street-address">
+          <textarea class="field-textarea" id="heroNotes" name="notes" placeholder="Tell us a bit about the project (optional)"></textarea>
           <button class="btn-primary" type="button" onclick="submitLead('hero')">Get my price</button>
           <p class="reassure">We'll reach out once. If it's not the right fit, no hard feelings.</p>
         </form>
@@ -280,11 +281,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </div>
 
       <div class="details-panel" id="closeDetails">
-        <form class="lead-form" id="closeForm" onsubmit="return false;">
-          <input class="field-input" id="closeName" type="text" placeholder="Full name" autocomplete="name">
-          <input class="field-input" id="closePhone" type="tel" placeholder="Phone number" autocomplete="tel">
-          <input class="field-input" id="closeAddress" type="text" placeholder="Address (optional)" autocomplete="street-address">
-          <textarea class="field-textarea" id="closeNotes" placeholder="Tell us a bit about the project (optional)"></textarea>
+        <form class="lead-form" id="closeForm" name="close-lead" data-netlify="true" onsubmit="return false;">
+          <input type="hidden" name="form-name" value="close-lead">
+          <input class="field-input" id="closeName" name="name" type="text" placeholder="Full name" autocomplete="name">
+          <input class="field-input" id="closePhone" name="phone" type="tel" placeholder="Phone number" autocomplete="tel">
+          <input class="field-input" id="closeAddress" name="address" type="text" placeholder="Address (optional)" autocomplete="street-address">
+          <textarea class="field-textarea" id="closeNotes" name="notes" placeholder="Tell us a bit about the project (optional)"></textarea>
           <button class="btn-primary" type="button" onclick="submitLead('close')">Get my price</button>
           <p class="reassure">We'll reach out once. If it's not the right fit, no hard feelings.</p>
         </form>
@@ -349,38 +351,44 @@ function submitLead(which){
     return;
   }
 
-  // NOTE: lead delivery is now wired to Slack (see postToSlack below).
-  // If you also want email/CRM/SMS delivery, that's a separate integration
-  // on top of this — the Slack post alone doesn't feed anything else.
+  // Lead delivery: Netlify's own native Forms feature. No webhooks, no
+  // tokens, nothing that can be silently revoked — Netlify detects the
+  // form at deploy time (via the data-netlify attribute + hidden
+  // form-name field) and stores every submission, and you get an email
+  // notification the moment one comes in (Site configuration > Forms >
+  // Notifications in the Netlify dashboard).
   const lead = {
-    service: leadState[which].service || null,
+    service: leadState[which].service || '',
     name, phone,
-    address: addressEl.value.trim() || null,
-    notes: notesEl.value.trim() || null,
+    address: addressEl.value.trim(),
+    notes: notesEl.value.trim(),
   };
 
-  // Send the lead to our own Netlify Function (same-origin, so none of the
-  // browser-side restrictions that broke the direct-to-Slack approach apply
-  // here), then redirect once that's done — or after 1.5s regardless, so a
-  // slow/failed function call never traps someone on the form.
   const goToThankYou = () => { window.location.href = 'thank-you.html'; };
   Promise.race([
-    postLeadToServer(lead, which).catch(()=>{}),
+    submitToNetlifyForms(which, lead).catch(()=>{}),
     new Promise(resolve => setTimeout(resolve, 1500)),
   ]).then(goToThankYou);
 }
 
-// Sends the lead to our own /.netlify/functions/slack-lead endpoint — a
-// same-origin request, not a cross-origin one, so it isn't subject to the
-// CORS/ad-blocker/Safari-tracking-prevention issues that made calling
-// Slack's webhook directly from the browser unreliable. The function itself
-// (in netlify/functions/slack-lead.js) does the actual server-to-server
-// call to Slack, the same way the working Terminal curl test did.
-function postLeadToServer(lead, which){
-  return fetch('/.netlify/functions/slack-lead', {
+// Submits directly to Netlify's Forms endpoint (a same-origin POST to "/"
+// with the form body URL-encoded, matching what a native HTML form
+// submission would send). This is Netlify's documented approach for
+// AJAX form submissions — see https://docs.netlify.com/forms/setup/#ajax-form-submissions
+function submitToNetlifyForms(which, lead){
+  const formName = which === 'hero' ? 'hero-lead' : 'close-lead';
+  const params = new URLSearchParams({
+    'form-name': formName,
+    service: lead.service,
+    name: lead.name,
+    phone: lead.phone,
+    address: lead.address,
+    notes: lead.notes,
+  });
+  return fetch('/', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...lead, which }),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
   });
 }
 </script>
