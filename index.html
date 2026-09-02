@@ -386,12 +386,12 @@ function postToSlack(lead, which){
     `*Notes:* ${lead.notes || 'Not provided'}`,
   ].join('\n');
 
-  const payload = JSON.stringify({ text });
+  const payload = 'payload=' + encodeURIComponent(JSON.stringify({ text }));
   try{
-    navigator.sendBeacon(SLACK_WEBHOOK_URL, new Blob([payload], {type:'application/json'}));
+    navigator.sendBeacon(SLACK_WEBHOOK_URL, new Blob([payload], {type:'application/x-www-form-urlencoded'}));
   }catch(err){
     // Fallback for the rare browser without sendBeacon support.
-    fetch(SLACK_WEBHOOK_URL, { method:'POST', body:payload, mode:'no-cors', keepalive:true }).catch(()=>{});
+    fetch(SLACK_WEBHOOK_URL, { method:'POST', body:payload, headers:{'Content-Type':'application/x-www-form-urlencoded'}, mode:'no-cors', keepalive:true }).catch(()=>{});
   }
 }
 </script>
