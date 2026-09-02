@@ -338,12 +338,18 @@ function selectService(which, btn){
   }
 
   // move focus to the name field the first time the panel opens, so
-  // toggling additional chips afterward doesn't keep yanking focus back
+  // toggling additional chips afterward doesn't keep yanking focus back.
+  // Also scroll the newly-revealed fields into view — on mobile the panel
+  // often opens below the fold, so without this someone can tap a service
+  // and never notice the form appeared underneath.
   if(!wasOpen && leadState[which].services.length > 0){
     setTimeout(()=>{
+      panel.scrollIntoView({behavior:'smooth', block:'center'});
+    }, 300);
+    setTimeout(()=>{
       const nameEl = document.getElementById(which+'Name');
-      if(nameEl) nameEl.focus({preventScroll:false});
-    }, 200);
+      if(nameEl) nameEl.focus({preventScroll:true});
+    }, 650);
   }
 }
 
