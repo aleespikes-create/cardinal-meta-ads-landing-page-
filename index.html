@@ -358,21 +358,25 @@ function submitLead(which){
     address: addressEl.value.trim() || null,
     notes: notesEl.value.trim() || null,
   };
-  postToSlack(lead, which);
 
-  // Redirect to the thank-you page rather than just toggling an inline
-  // message in place. This is what makes the lead a trackable "conversion" —
-  // GTM (and Meta Ads' pixel/conversion event) can fire off a Page View
-  // trigger scoped to thank-you.html, which an in-place confirmation on the
-  // same URL can never do.
-  window.location.href = 'thank-you.html';
+  // Give the Slack post up to 700ms to actually fire before redirecting —
+  // long enough for a normal request to complete, short enough that a slow
+  // or blocked request doesn't noticeably delay the person's experience.
+  const goToThankYou = () => { window.location.href = 'thank-you.html'; };
+  Promise.race([
+    postToSlack(lead, which).catch(()=>{}),
+    new Promise(resolve => setTimeout(resolve, 700)),
+  ]).then(goToThankYou);
 }
 
 // Posts a captured lead straight to a Slack channel via an Incoming Webhook.
-// Uses sendBeacon instead of fetch() because the page redirects immediately
-// after this runs — sendBeacon is specifically designed to reliably deliver
-// a request even as the page is navigating away, where a normal fetch can
-// get cancelled mid-flight.
+// Uses a regular fetch() (not sendBeacon) because sendBeacon is silently
+// blocked by several ad blockers and privacy extensions (uBlock Origin,
+// Brave Shields, Safari tracking prevention) since it's the same API
+// analytics trackers use — when that happens there's no error and no
+// network entry at all, which makes it impossible to debug. fetch() is
+// far less likely to be blocked and, if it is, shows up clearly as a
+// failed/blocked request in the browser's Network tab.
 const SLACK_WEBHOOK_URL = 'https://hooks.slack.com/services/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';
 
 function postToSlack(lead, which){
@@ -387,12 +391,16 @@ function postToSlack(lead, which){
   ].join('\n');
 
   const payload = 'payload=' + encodeURIComponent(JSON.stringify({ text }));
-  try{
-    navigator.sendBeacon(SLACK_WEBHOOK_URL, new Blob([payload], {type:'application/x-www-form-urlencoded'}));
-  }catch(err){
-    // Fallback for the rare browser without sendBeacon support.
-    fetch(SLACK_WEBHOOK_URL, { method:'POST', body:payload, headers:{'Content-Type':'application/x-www-form-urlencoded'}, mode:'no-cors', keepalive:true }).catch(()=>{});
-  }
+  // mode:'no-cors' is required because Slack's webhook endpoint doesn't send
+  // back CORS headers — this means we can't read the response (so we can't
+  // tell success from failure in code), but the POST itself still goes
+  // through and Slack still receives and posts the message.
+  return fetch(SLACK_WEBHOOK_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: payload,
+  });
 }
 </script>
 </body>
