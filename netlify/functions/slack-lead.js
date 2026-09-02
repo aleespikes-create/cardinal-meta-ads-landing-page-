@@ -4,7 +4,7 @@
 // its own server-to-server request to Slack, exactly like the Terminal
 // curl command that worked earlier in testing.
 
-const SLACK_WEBHOOK_URL = 'https://hooks.slack.com/services/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';
+const SLACK_WEBHOOK_URL = 'https://hooks.slack.com/services/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';
 
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
