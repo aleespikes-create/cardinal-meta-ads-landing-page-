@@ -359,57 +359,28 @@ function submitLead(which){
     notes: notesEl.value.trim() || null,
   };
 
-  // Give the Slack post up to 700ms to actually fire before redirecting —
-  // long enough for a normal request to complete, short enough that a slow
-  // or blocked request doesn't noticeably delay the person's experience.
+  // Send the lead to our own Netlify Function (same-origin, so none of the
+  // browser-side restrictions that broke the direct-to-Slack approach apply
+  // here), then redirect once that's done — or after 1.5s regardless, so a
+  // slow/failed function call never traps someone on the form.
   const goToThankYou = () => { window.location.href = 'thank-you.html'; };
   Promise.race([
-    postToSlack(lead, which).catch(()=>{}),
-    new Promise(resolve => setTimeout(resolve, 700)),
+    postLeadToServer(lead, which).catch(()=>{}),
+    new Promise(resolve => setTimeout(resolve, 1500)),
   ]).then(goToThankYou);
 }
 
-// Posts a captured lead straight to a Slack channel via an Incoming Webhook.
-// Uses a regular fetch() (not sendBeacon) because sendBeacon is silently
-// blocked by several ad blockers and privacy extensions (uBlock Origin,
-// Brave Shields, Safari tracking prevention) since it's the same API
-// analytics trackers use — when that happens there's no error and no
-// network entry at all, which makes it impossible to debug. fetch() is
-// far less likely to be blocked and, if it is, shows up clearly as a
-// failed/blocked request in the browser's Network tab.
-const SLACK_WEBHOOK_URL = 'https://hooks.slack.com/services/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';
-
-function postToSlack(lead, which){
-  const formLabel = which === 'hero' ? 'top form' : 'bottom form';
-  const text = [
-    `*New lead from the ${formLabel}*`,
-    `*Service:* ${lead.service || 'Not specified'}`,
-    `*Name:* ${lead.name}`,
-    `*Phone:* ${lead.phone}`,
-    `*Address:* ${lead.address || 'Not provided'}`,
-    `*Notes:* ${lead.notes || 'Not provided'}`,
-  ].join('\n');
-
-  // Send the raw JSON body directly — this is the modern, app-based Incoming
-  // Webhook format Slack's own docs specify (their sample curl command sends
-  // raw JSON, not the old `payload=` form-encoded wrapper we tried before).
-  //
-  // Deliberately NOT setting a Content-Type header: when fetch() gets a plain
-  // string as its body with no explicit header, the browser defaults to
-  // `text/plain;charset=UTF-8` — one of the few content types allowed to skip
-  // CORS preflight entirely. Slack's server still parses the raw body as
-  // JSON regardless of that label, so the message posts correctly even
-  // though the header technically says "plain text."
-  //
-  // mode:'no-cors' is required because Slack's webhook endpoint doesn't send
-  // back CORS headers — this means we can't read the response (so we can't
-  // tell success from failure in code), but the POST itself still goes
-  // through and Slack still receives and posts the message.
-  const payload = JSON.stringify({ text });
-  return fetch(SLACK_WEBHOOK_URL, {
+// Sends the lead to our own /.netlify/functions/slack-lead endpoint — a
+// same-origin request, not a cross-origin one, so it isn't subject to the
+// CORS/ad-blocker/Safari-tracking-prevention issues that made calling
+// Slack's webhook directly from the browser unreliable. The function itself
+// (in netlify/functions/slack-lead.js) does the actual server-to-server
+// call to Slack, the same way the working Terminal curl test did.
+function postLeadToServer(lead, which){
+  return fetch('/.netlify/functions/slack-lead', {
     method: 'POST',
-    mode: 'no-cors',
-    body: payload,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...lead, which }),
   });
 }
 </script>
