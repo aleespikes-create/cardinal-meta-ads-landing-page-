@@ -390,15 +390,25 @@ function postToSlack(lead, which){
     `*Notes:* ${lead.notes || 'Not provided'}`,
   ].join('\n');
 
-  const payload = 'payload=' + encodeURIComponent(JSON.stringify({ text }));
+  // Send the raw JSON body directly — this is the modern, app-based Incoming
+  // Webhook format Slack's own docs specify (their sample curl command sends
+  // raw JSON, not the old `payload=` form-encoded wrapper we tried before).
+  //
+  // Deliberately NOT setting a Content-Type header: when fetch() gets a plain
+  // string as its body with no explicit header, the browser defaults to
+  // `text/plain;charset=UTF-8` — one of the few content types allowed to skip
+  // CORS preflight entirely. Slack's server still parses the raw body as
+  // JSON regardless of that label, so the message posts correctly even
+  // though the header technically says "plain text."
+  //
   // mode:'no-cors' is required because Slack's webhook endpoint doesn't send
   // back CORS headers — this means we can't read the response (so we can't
   // tell success from failure in code), but the POST itself still goes
   // through and Slack still receives and posts the message.
+  const payload = JSON.stringify({ text });
   return fetch(SLACK_WEBHOOK_URL, {
     method: 'POST',
     mode: 'no-cors',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: payload,
   });
 }
