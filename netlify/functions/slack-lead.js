@@ -28,12 +28,28 @@ exports.handler = async function (event) {
     return { statusCode: 400, body: 'Invalid JSON' };
   }
 
+  // Turns a phone number into a tappable Slack link that opens the phone
+  // dialer on mobile (Slack's <tel:...|display text> link syntax). Keeps
+  // whatever formatting the lead typed as the display text, but builds a
+  // clean E.164-ish number for the actual tel: link. Assumes US numbers
+  // (10 digits, or 11 starting with 1) since that's this business's market.
+  function formatPhone(phone) {
+    if (!phone) return 'Not provided';
+    const digits = phone.replace(/\D/g, '');
+    if (!digits) return phone;
+    let e164;
+    if (digits.length === 10) e164 = '+1' + digits;
+    else if (digits.length === 11 && digits.startsWith('1')) e164 = '+' + digits;
+    else e164 = '+' + digits;
+    return `<tel:${e164}|${phone}>`;
+  }
+
   const formLabel = lead.which === 'hero' ? 'top form' : 'bottom form';
   const text = [
     `*New lead from the ${formLabel}*`,
     `*Service:* ${lead.service || 'Not specified'}`,
     `*Name:* ${lead.name || 'Not provided'}`,
-    `*Phone:* ${lead.phone || 'Not provided'}`,
+    `*Phone:* ${formatPhone(lead.phone)}`,
     `*Address:* ${lead.address || 'Not provided'}`,
     `*Notes:* ${lead.notes || 'Not provided'}`,
   ].join('\n');
